@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tómbola Inteligente de Dominó 🀄</title>
+    <style>
+        :root {
+            --primary: #2c3e50;
+            --accent: #27ae60;
+            --retadores: #2980b9;
+            --danger: #e74c3c;
+            --bg: #f8f9fa;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg);
+            margin: 0;
+            padding: 20px;
+            color: #333;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: white;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        h1 {
+            text-align: center;
+            color: var(--primary);
+            margin-bottom: 25px;
+        }
+        .form-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        input {
+            flex: 1;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 6px;
+            font-size: 16px;
+            outline: none;
+        }
+        input:focus {
+            border-color: var(--primary);
+        }
+        button {
+            padding: 12px 20px;
+            border: none;
+            border-radius: 6px;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 16px;
+            transition: 0.2s;
+        }
+        .btn-add { background-color: var(--primary); color: white; }
+        .btn-add:hover { background-color: #34495e; }
+        
+        .btn-draw { 
+            background-color: var(--accent); 
+            color: white; 
+            width: 100%; 
+            font-size: 18px;
+            margin-bottom: 20px;
+        }
+        .btn-draw:hover { opacity: 0.9; }
+
+        .mesa-box {
+            background-color: #e8f8f5;
+            border: 2px dashed var(--accent);
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+            margin-bottom: 25px;
+            display: none;
+        }
+        .mesa-box h3 { margin-top: 0; color: #117a65; }
+        
+        .parejas-container {
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            margin-top: 15px;
+        }
+        .pareja {
+            background: white;
+            padding: 10px 15px;
+            border-radius: 6px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            min-width: 40%;
+        }
+        .pareja h4 { margin: 0 0 5px 0; color: var(--primary); }
+        .vs { font-weight: bold; color: var(--danger); font-size: 18px; }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        th { background-color: #f2f2f2; color: var(--primary); }
+        .badge {
+            background-color: #e1f5fe;
+            color: #0288d1;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .btn-reset {
+            background-color: #7f8c8d;
+            color: white;
+            font-size: 12px;
+            padding: 5px 10px;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>🀄 Tómbola de Dominó</h1>
+
+    <div class="form-group">
+        <input type="text" id="nombreJugador" placeholder="Nombre del jugador..." autocomplete="off">
+        <button class="btn-add" onclick="agregarJugador()">Agregar</button>
+    </div>
+
+    <button id="btnSorteo" class="btn-draw" onclick="ejecutarSorteo()">🎲 INICIAR MESA (4 JUGADORES) 🎲</button>
+
+    <div id="mesaBox" class="mesa-box">
+        <h3 id="tituloMesa">¡Mesa Inicial Armada! 🎴</h3>
+        <div class="parejas-container">
+            <div class="pareja">
+                <h4 id="tituloP1">Pareja 1 🔵</h4>
+                <div id="p1"></div>
+            </div>
+            <div class="vs">VS</div>
+            <div class="pareja">
+                <h4 id="tituloP2">Pareja 2 🔴</h4>
+                <div id="p2"></div>
+            </div>
+        </div>
+        <button class="btn-reset" onclick="reiniciarFlujo()">Reiniciar a Mesa de 4</button>
+    </div>
+
+    <h3>Jugadores en Espera</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>Nombre</th>
+                <th>Prioridad (Espera)</th>
+            </tr>
+        </thead>
+        <tbody id="tablaEspera">
+            </tbody>
+    </table>
+</div>
+
+<script>
+    let jugadores = {};
+    let primeraRonda = true; // Controla si saca 4 o 2 jugadores
+
+    document.getElementById('nombreJugador').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') agregarJugador();
+    });
+
+    function actualizarTabla() {
+        const tbody = document.getElementById('tablaEspera');
+        tbody.innerHTML = '';
+
+        const ordenados = Object.entries(jugadores).sort((a, b) => b[1] - a[1]);
+
+        if (ordenados.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="2" style="text-align:center; color:#999;">Tómbola vacía</td></tr>';
+            return;
+        }
+
+        ordenados.forEach(([nombre, puntos]) => {
+            const nivel = puntos === 1 ? 'Recién entrado' : `Espera Nivel ${puntos}`;
+            tbody.innerHTML += `
+                <tr>
+                    <td><strong>${nombre}</strong></td>
+                    <td><span class="badge">${nivel}</span></td>
+                </tr>
+            `;
+        });
+    }
+
+    function agregarJugador() {
+        const input = document.getElementById('nombreJugador');
+        const nombre = input.value.trim();
+
+        if (!nombre) return alert('Por favor, escribe un nombre.');
+        if (jugadores[nombre]) return alert('Este jugador ya está en la tómbola.');
+
+        jugadores[nombre] = 1;
+        input.value = '';
+        actualizarTabla();
+    }
+
+    // Función auxiliar para sacar jugadores respetando las prioridades
+    function extraerJugadoresPorPrioridad(cantidad) {
+        let nombres = Object.keys(jugadores);
+        let pesos = Object.values(jugadores);
+        let elegidos = [];
+
+        while (elegidos.length < cantidad) {
+            let totalPeso = pesos.reduce((a, b) => a + b, 0);
+            let r = Math.random() * totalPeso;
+            let suma = 0;
+            
+            for (let i = 0; i < nombres.length; i++) {
+                suma += pesos[i];
+                if (r <= suma) {
+                    elegidos.push(nombres[i]);
+                    nombres.splice(i, 1);
+                    pesos.splice(i, 1);
+                    break;
+                }
+            }
+        }
+
+        // Eliminarlos de la tómbola oficial
+        elegidos.forEach(j => delete jugadores[j]);
+        return elegidos;
+    }
+
+    function ejecutarSorteo() {
+        const cantidadNecesaria = primeraRonda ? 4 : 2;
+        
+        if (Object.keys(jugadores).length < cantidadNecesaria) {
+            return alert(`Faltan jugadores. Se necesitan mínimo ${cantidadNecesaria} en la tómbola.`);
+        }
+
+        // Sacar los jugadores necesarios con el sistema de peso/prioridad
+        let elegidos = extraerJugadoresPorPrioridad(cantidadNecesaria);
+
+        // Aumentar la prioridad de los que se quedaron sentados en la tómbola (+2 puntos)
+        for (let jugador in jugadores) {
+            jugadores[jugador] += 2;
+        }
+
+        if (primeraRonda) {
+            // Mezclar al azar para armar las primeras dos parejas
+            elegidos.sort(() => Math.random() - 0.5);
+            
+            document.getElementById('tituloMesa').innerText = "¡Mesa Inicial Armada! 🎴";
+            document.getElementById('tituloP1').innerText = "Pareja 1 🔵";
+            document.getElementById('tituloP2').innerText = "Pareja 2 🔴";
+            
+            document.getElementById('p1').innerHTML = `<strong>${elegidos[0]}</strong><br>y<br><strong>${elegidos[1]}</strong>`;
+            document.getElementById('p2').innerHTML = `<strong>${elegidos[2]}</strong><br>y<br><strong>${elegidos[3]}</strong>`;
+            
+            // Cambiar el modo para las siguientes jugadas
+            primeraRonda = false;
+            const btn = document.getElementById('btnSorteo');
+            btn.innerText = "🎲 SACAR SIGUIENTE PAREJA (2 JUGADORES) 🎲";
+            btn.style.backgroundColor = "var(--retadores)";
+        } else {
+            // Modo 2 jugadores (Retadores)
+            document.getElementById('tituloMesa').innerText = "¡Nuevos Retadores Listos! ⚔️";
+            document.getElementById('tituloP1').innerText = "Mesa (Los que ganaron)";
+            document.getElementById('tituloP2').innerText = "Nuevos Retadores 🚀";
+            
+            document.getElementById('p1').innerHTML = `<span style="color:#7f8c8d; font-style:italic;">La pareja que ganó la mano anterior se queda sentada.</span>`;
+            document.getElementById('p2').innerHTML = `<strong>${elegidos[0]}</strong><br>y<br><strong>${elegidos[1]}</strong>`;
+        }
+
+        document.getElementById('mesaBox').style.display = 'block';
+        actualizarTabla();
+    }
+
+    function reiniciarFlujo() {
+        primeraRonda = true;
+        const btn = document.getElementById('btnSorteo');
+        btn.innerText = "🎲 INICIAR MESA (4 JUGADORES) 🎲";
+        btn.style.backgroundColor = "var(--accent)";
+        document.getElementById('mesaBox').style.display = 'none';
+    }
+
+    actualizarTabla();
+</script>
+
+</body>
+</html>
